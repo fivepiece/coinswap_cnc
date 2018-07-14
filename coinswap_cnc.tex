@@ -1,0 +1,178 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{listings}
+\title{Scriptless, atomic coinswap using cut-and-choose}
+\date{}
+\begin{document}
+\maketitle
+\section{Intro}
+The following is a method of achieving coinswap that aims to be scriptless, atomic and unlinkable both in the case of a successful swap or the use of backouts, extending the similar construction of the half-scriptless swap\cite{hss}.  We assume that the blockchains in use by participants of the swap support timelocking mechanism for transactions; For Bitcoin and most Bitcoin-derived altcoins the \texttt{nLocktime} field of the transaction will be used by locking backout transactions to an absolute block height.  Described hereafter is the protocol where the public keys are elliptic curve points.  The signature algorithm used for signing and validation of transaction signatures is irrelevant to the protocol and can be different between the two chains.
+\\
+\\
+As with any coinswap protocol, one party initiates the process and a second party might accept her offer for a swap.  Timelocks are used to produce signed \textbf{Backout} transactions for both parties from their own funding for the swap in cases when the swap halts.  As such, the two parties will know each other's funding UTXOs and backout pubkeys at the setup stage of the protocol.  Ways to achieve those properly exist \begin{tiny}(e.g. PoDLE)\end{tiny}, but are out of scope of this document.  To achieve security in the protocol, a cut-and-choose \cite{cnc} game will be taking place afterwhich both parties will have sufficient guarantee that cheating is extremely unlikely.
+\\
+\\
+For notation, we will use lowercase letters for discrete logarithms and plain integers, uppercase for curve points and signatures, and \texttt{teletype} for scriptPubKeys, transactions and UTXOs.  Subscript is used to convey relationships between parameters, or as their numerical index in a set.
+We will assume that Alice initates the process and Bob accepts her offer to swap.
+\section{Setup}
+The protocol begins with a setup stage where the parties exchange public keys for two multisig scriptpubkeys, UTXOs, their agreed locktimes and backout public keys.
+\begin{footnotesize}
+\begin{enumerate}
+\item Exchange UTXOs
+	\begin{itemize}
+	\item Alice : \textsf{UA}
+	\item Bob   : \textsf{UB}
+	\end{itemize}
+\item Exchange public keys
+	\begin{itemize}
+	\item Alice : $A1, A2$
+	\item Bob   : $B1, B2$
+	\end{itemize}
+\item Exchange backout scriptPubKeys
+	\begin{itemize}
+	\item Alice : $A_{back}$
+	\item Bob   : $B_{back}$
+	\end{itemize}
+\item Agree on backout locktimes
+	\begin{itemize}
+	\item Alice : \textsf{L2}
+	\item Bob   : \textsf{L1}
+	\end{itemize}
+\end{enumerate}
+\end{footnotesize}
+Both parties now compute a transaction \textsf{TX1} which is Bob's funding for the swap.  They begin creating a 2-of-2 multisig scriptpubkey, and Bob's UTXO \textsf{UB} will be its funding.
+\begin{footnotesize}
+\begin{itemize}
+\item \texttt{scr1} : \texttt{2 A1 B1 2 CHECKMULTISIG}
+\item \textsf{TX1} : \textsf{UB} $\rightarrow$ \textsf{scr1}
+\end{itemize}
+\end{footnotesize}
+Alice now sends to Bob a signature by her key $A1$ for his backout from \textsf{TX1}, timelocked to \textsf{L1}.
+\begin{footnotesize}
+\begin{itemize}
+\item $Sig_{A1}(\textsf{TX1} \rightarrow B_{back})$
+\end{itemize}
+\end{footnotesize}
+Bob checks Alice's signature, and if it's valid, the parties continue to the next phase.
+\newpage
+\section{Game}
+In this stage, the parties play a cut-and-choose game.  At its end Alice will have knowledge of a signature by Bob's $B1$, for a transaction that is spending \textsf{TX1} and pays her to a scriptPubKey $A_{swap}$, while Bob will have knowledge of a public key $T$ and a guarantee that if his signature is used in a transaction, he will then learn the discrete log for that pubkey. \\ \\
+During Bob's signing phase, he is only given a \textbf{sighash} $h1$ to sign for.  It's important for Alice's security that Bob is not able to find the preimage for for her $h1$ except by her using his signature in the transaction.  She must select her swap pubkey at random as it acts as the only information Bob is missing to be know the preimage. \\ \\
+Bob's security with regards to "blidly" signing a random hash comes from his choice of $B1$, which is a pubkey not used by him in any other UTXOs, as well as the fact that the funding for Alice's payment, \textsf{TX1} itself, has not been yet been signed for by him and relayed to the network.
+\\ \\
+The purpose of disclosing $T$'s discrete log (DL) to Bob is to allow him to redeem Alice's funding of the swap.  $T$ in turn is used in a multisig scriptPubKey funded by Alice's UTXO.  Knowledge of $T$'s DL will allow him to redeem the output for his own swap scriptPubKey $B_{swap}$. \\ \\
+Atomicity in the protocol is achieved by conditioning Alice's use of Bob's signature in a transaction that pays her from \textsf{TX1}, and by choosing a component of $T$'s DL to be some \textbf{non-sighash} hash $h0$ of that transaction, to enable Bob the spending of her swap funds by providing a signature for $T$. \\ \\
+For Bob to be the sole owner of the complete DL for $T$, as Alice herself must not be able to sign for it, $T$ is defined to be a tweak by $h0$ of a yet undetermined ephemeral public key $B3$ of Bob's. \\  \\
+Technically, for a signature by $B1$ that Alice wishes to receive from Bob for a transaction $(\textsf{TX1} \rightarrow A_{swap})$, she will provide him with a pair of $(h1, T)$.  Here \emph{H0()} is a hash function \textbf{different} from the sighash function, and \texttt{*} is ecmul :
+\begin{footnotesize}
+\begin{itemize}
+\item $h0$ = \emph{H0}$(\textsf{TX1} \rightarrow A_{swap})$
+\item $T = h0*G + B3$
+\item $h1$ = \emph{sighash}$(TX1 \rightarrow A_{swap})$
+\end{itemize}
+\end{footnotesize}
+By itself, this exchange is insecure towards Bob.  He has no way of knowing whether Alice correctly tweaked $B3$ by $h0$ to produce $T$, and if $h0$ is anything else but a secret hash of her $(\textsf{TX1} \rightarrow A_{swap})$, Bob learns nothing of value from the the transaction being used on the network.  \\ \\
+By overlaying cut-and-choose here we enable Bob to test Alice's correct execution of the protocol many times over, enough to guarantee that cheating is highly improbable.  Bob will feed Alice a mixed set made of $n$ of his pubkeys, and $m$ NUMS pubkeys which are a hash of some random data chosen by Bob, and \emph{coerced to point}. \\
+At first, Alice can't tell which of the keys in the set are Bob's real keys and which are the NUMS points.  She will generate $(n+m)$ different $A_{swap}$ public keys and run her step of the protocol against each of the pubkeys provided by Bob, returning a different $(h1_i, T_i)$ pair for each. \\ \\
+Bob starts by computing a set of $n$ ephemeral keys for himself : \\
+\begin{footnotesize}
+for $i$ in $n$: \\
+	\indent $b3_i$ = \emph{random()} \\
+    \indent $B3_i$ = $b3_i * G$ \\
+\end{footnotesize}
+\\
+And a set of $m$ NUMS public keys.  Here \emph{hash()} is a cryptographic hash function and \texttt{|} is concatenation : \\
+\begin{footnotesize}
+$w$ = \emph{random()} \\
+for $i$ in $m$: \\
+    \indent $q_i$ = \emph{random()} \\ 
+    \indent $f_i$ = \emph{hash}$( w \texttt{|} q_i )$ \\
+    \indent $F_i$ = \emph{coerce-to-point}$(f_i)$ \\
+\end{footnotesize} \\
+He then shuffles all $(n+m)$ pubkeys and creates a commitment $c$ to the ordering of the shuffled set by taking :
+\begin{footnotesize}
+\begin{itemize}
+\item $\{B3'_1..B3'_{n+m}\}$ = \emph{shuffle}$( \{B3_1..B3_n\}, \{F..1, F_m\} )$
+\item $c$ = \emph{hash}$(w \texttt{|} \text{shuffled-set-order})$
+\end{itemize}
+\end{footnotesize}
+And sends the set of $B3'_i$ pubkeys along with the commitment $c$ to Alice. \\ \\
+Alice first prepares a set of $(n+m)$ of her own public keys, to be used as her $A_{swap}$ scriptPubKeys.  For each of her pubkeys, she then creates a transaction redeeming \textsf{TX1} (Bob's funding to the swap), and its sighash.  Each of Bob's provided pubkeys will then be tweaked by this transaction's secret hash, creating $(n+m)$ different values of a public point $T$ : \\ \\
+\begin{footnotesize}
+for $i$ in $(n+m)$: \\
+    \indent $h0_i$ = \emph{H0}$(TX1->A_{swap_i})$ \\
+    \indent $T_i$ = $h0_i*G + B3'_i$ \\
+    \indent $h1_i$ = \emph{sighash}$(\textsf{TX1} \rightarrow A_{swap_i})$ \\
+\end{footnotesize}
+\\
+She then sends the set of $(n+m)$ pairs $(h1_i, T_i)$ to Bob. \\ \\
+Bob tests Alice for proper execution of the protocol.  He sends her his previously secret value $w$, all random $q_i$ values and reveals the order of his shuffled set of real and NUMS pubkeys.  Alice is then able to check that the commitment $c$ is in fact a commitment to the shuffled $B3'_i$ pubkeys : \\ \\
+\begin{footnotesize}
+$c'$ = \emph{hash}$( w \texttt{|} \text{shuffled-set-order})$ \\
+$c' \stackrel{?}{=} c$ \\
+for $i$ in $m$: \\
+    \indent $f'_i$ = \emph{hash}$( w \texttt{|} q_i )$ \\
+    \indent $F'_i$ = \emph{coerce-to-point}$(f'_i)$ \\
+    \indent $F'_i \stackrel{?}{=} F_i$ \\
+\end{footnotesize} \\ \\
+And if this check passes, she sends back to Bob a set of her secret $(\textsf{TX1} \rightarrow A_{swap_i})$ for all $m$ NUMS pubkey indexes.  
+Bob is able check that Alice executed the protcol faithfuly for these pubkeys by comparing his results of the same steps against the set provided by her : \\ \\
+\begin{footnotesize}
+for $i$ in $m$: \\
+    \indent $h0'_i$ = \emph{H0}$(\textsf{TX1} \rightarrow A_{swap_i})$ \\
+    \indent $T'_i = h0'_i*G + F_i$ \\
+    \indent $T'_i \stackrel{?}{=} T_i$ \\
+    \indent $h1'_i$ = \emph{sighash}$(\textsf{TX1} \rightarrow A_{swap_i})$ \\
+    \indent $h1'_i \stackrel{?}{=} h1_i$ \\
+\end{footnotesize} \\ \\
+If all checks pass, Bob can be reasonably sure that Alice has not cheated and that the remaining $n$ pairs $(h1_i, T_i)$ from her set are properly computed sighashes and tweaked $B3_i$ pubkeys.  Bob now picks an index $j$ from these $n$ pairs at random, $(h1_j, T_j)$, and tells Alice his choice of $j$, and they continue to the next stage which is the swap itself. \\
+We see that by relying on cut-and-choose strategy for security, Alice's chance of successfully cheating is at the order of $1/\binom{n+m}{n}$.
+\begin{tiny}
+\begin{itemize}
+\item As this is done on a bitcoin-like blockchain, \emph{sighash} is defined as \emph{SHA256d}
+\item We define \emph{H0()} to be \emph{SHA256}.  Coincidentally, this means that the result of  \emph{H0()} is a midstate of \emph{sighash}.
+\item By aiming for a security parameter of $2^{128}$, we choose $(n == m == 65)$
+\end{itemize}
+\end{tiny}
+\newpage
+\section{Swap}
+Both parties compute Alice's fudning for the swap, TX2.  They begin by creating a 2-of-3 multisig scriptPubKey, where the signers can be either two of $A2$, $B2$ and $T_j$.  Alice will be paying into this script from her UTXO \textsf{UA}.
+\begin{footnotesize}
+\begin{itemize}
+\item \texttt{scr2} : \texttt{2 A2 B2 T$_j$ 3 CHECKMULTISIG}
+\item \textsf{TX2} : \textsf{UA} $\rightarrow$ \texttt{scr2}
+\end{itemize}
+\end{footnotesize}
+Bob now sends two signatures to Alice.  The first is a signature by his key $B2$ for her backout from \textsf{TX2}, timelocked to \textsf{L2}, and the second signature is by his key $B1$ for the sighash $h1_j$.
+\begin{footnotesize}
+\begin{itemize}
+\item $Sig_{B2}(\textsf{TX2} \rightarrow A_{back})$
+\item $Sig_{B1}(h1)$
+\end{itemize}
+\end{footnotesize}
+Alice validates Bob's signatures, and if both are valid, she broadcasts \textsf{TX2} to the network.  Bob waits for \textsf{TX2} to be mined, and then broadcasts \textsf{TX1}.  Alice waits for \textsf{TX1} to be mined and buried under a few more blocks.  \\
+Finally she can use Bob's $Sig_{B1}(h1)$ to sign a spend of $(\textsf{TX1} \rightarrow A_{swap_j})$, redeeming Bob's funding to the swap.  \\
+As Bob sees his funding being spent, he learns the transaction $(\textsf{TX1} \rightarrow A_{swap_j})$ itself and can compute the DL of $T$.
+\begin{footnotesize}
+\begin{itemize}
+\item $h0_j$ = \emph{H0}$(\textsf{TX1} \rightarrow A_{swap_j})$
+\item $t_j$ = $h0_j + b3_j$
+\end{itemize}
+\end{footnotesize}
+He is  then able to sign a spend of $\textsf{TX2} \rightarrow B_{swap}$ using two of the three pubkeys authorized to do so, $B2$ and $T_j$, and redeem Alice's funding to the swap.
+\begin{footnotesize}
+\begin{thebibliography}{9}
+\bibitem{hss}
+  waxwing, \\
+  The half-scriptless swap, \\
+  \texttt{https://joinmarket.me/blog/blog/the-half-scriptless-swap/}
+
+\bibitem{cnc}
+  Yehuda Lindell, \\
+  Fast Cut-and-Choose Based Protocols for Malicious and Covert Adversaries
+\end{thebibliography}
+\end{footnotesize}
+\end{document}
