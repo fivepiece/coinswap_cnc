@@ -162,7 +162,7 @@ As Bob sees his funding being spent, he learns the transaction $(\textsf{TX1} \r
 \end{footnotesize}
 He is  then able to sign a spend of $\textsf{TX2} \rightarrow B_{swap}$ using two of the three pubkeys authorized to do so, $B2$ and $T_j$, and redeem Alice's funding to the swap.
 \newpage
-\section{summary}
+\section{Summary}
 Presented here is a method of achieving atomic, scriptless coinswap.  Compared to to other atomic coinswap protocols like the TierNolan swap \cite{tiernolan}, ours is unlinkable to observers. No hashes and preimages are revealed on chain which can connect the two transactions in the swap.  Even if backouts are used by the participants, unlike in the CoinSwapCS \cite{coinswapcs} protocol which \textit{does} remain unlinkable to observers in case of a succesful swap but not when it halts.
 \\
 Privacy in case of backouts is kept by making use of the transaction's \texttt{nLocktime} field to timelock the backouts.  This field is set by default in transactions created by wallet software such as Bitcoin Core, which means that a backout transaction from a halted swap attempt can be indistinguishable from a successful one if it is used exactly at its unlocking block height.
