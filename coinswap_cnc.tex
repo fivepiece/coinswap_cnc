@@ -9,7 +9,7 @@
 \begin{document}
 \maketitle
 \section{Intro}
-The following is a method of achieving coinswap that aims to be scriptless, atomic and unlinkable both in the case of a successful swap or the use of backouts, extending the similar construction of the half-scriptless swap\cite{hss}.  We assume that the blockchains in use by participants of the swap support timelocking mechanism for transactions; For Bitcoin and most Bitcoin-derived altcoins the \texttt{nLocktime} field of the transaction will be used by locking backout transactions to an absolute block height.  Described hereafter is the protocol where the public keys are elliptic curve points.  The signature algorithm used for signing and validation of transaction signatures is irrelevant to the protocol and can be different between the two chains.
+The following is a method of achieving coinswap\cite{gmaxwell} that aims to be scriptless, atomic and unlinkable both in the case of a successful swap or the use of backouts, extending the similar construction of the half-scriptless swap\cite{hss}.  We assume that the blockchains in use by participants of the swap support timelocking mechanism for transactions; For Bitcoin and most Bitcoin-derived altcoins the \texttt{nLocktime} field of the transaction will be used by locking backout transactions to an absolute block height.  Described hereafter is the protocol where the public keys are elliptic curve points.  The signature algorithm used for signing and validation of transaction signatures is irrelevant to the protocol and can be different between the two chains.
 \\
 \\
 As with any coinswap protocol, one party initiates the process and a second party might accept her offer for a swap.  Timelocks are used to produce signed \textbf{Backout} transactions for both parties from their own funding for the swap in cases when the swap halts.  As such, the two parties will know each other's funding UTXOs and backout pubkeys at the setup stage of the protocol.  Ways to achieve those properly exist \begin{tiny}(using a discrete log equivalence proof for example)\end{tiny}, but are out of scope of this document.  To achieve security in the protocol, a cut-and-choose \cite{cnc} game, much like the one taking place in the Tumblebit \cite{tumblebit} protocol will be taking place afterwhich both parties will have sufficient guarantee that cheating is extremely unlikely.
@@ -172,6 +172,11 @@ With regards to adaptor signatures based, scriptless coinswaps \cite{andytoshi},
 As for more advanced systems such as Tumblebit \cite{tumblebit} and blind scriptless swap \cite{nickler}, an open question remains: whether this protocol can be extended for use in a client-tumbler model where the tumbler itself can't link coins swapped between participants, and as a result lower the interactivity required in the protocol.
 \begin{tiny}
 \begin{thebibliography}{9}
+\bibitem{gmaxwell}
+  Gregory Maxwell, \\
+  CoinSwap: Transaction graph disjoint trustless trading, \\
+  \texttt{https://bitcointalk.org/index.php?topic=321228.0}
+
 \bibitem{hss}
   waxwing, \\
   The half-scriptless swap, \\
